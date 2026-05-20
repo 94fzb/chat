@@ -1,93 +1,138 @@
-# Chat
+# AIOS 概要设计（持续完善）
 
+## 1. 项目定位
 
+AIOS（AI Operating System）用于统一管理 **多智能体协作、工具调用、上下文记忆与任务编排**，面向“可持续运行的 AI 业务系统”。
 
-## Getting started
+目标：
+- 降低 AI 应用从 Demo 到生产的复杂度。
+- 提供标准化的任务生命周期管理。
+- 支持可观测、可回放、可审计的执行链路。
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+---
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+## 2. 总体架构
 
-## Add your files
+采用分层 + 事件驱动的设计：
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+1. **接入层（Gateway）**
+   - 对外提供 API / Webhook / 消息队列接入。
+   - 负责鉴权、限流、租户隔离与请求标准化。
 
-```
-cd existing_repo
-git remote add origin https://gitlab.i.huaxisy.com/zhengchangchun/chat.git
-git branch -M master
-git push -uf origin master
-```
+2. **编排层（Orchestrator）**
+   - 负责任务拆解、路由、重试策略、并行调度。
+   - 支持 Workflow DSL 与状态机编排。
 
-## Integrate with your tools
+3. **智能体层（Agent Runtime）**
+   - 承载不同角色 Agent（Planner/Worker/Reviewer 等）。
+   - 管理会话上下文、工具权限与执行预算。
 
-- [ ] [Set up project integrations](https://gitlab.i.huaxisy.com/zhengchangchun/chat/-/settings/integrations)
+4. **能力层（Tools & Skills）**
+   - 统一封装外部工具（搜索、代码执行、数据库、第三方 API）。
+   - 提供技能模板（提示词、策略、输入输出协议）。
 
-## Collaborate with your team
+5. **记忆与知识层（Memory & Knowledge）**
+   - 短期记忆：会话窗口与任务缓存。
+   - 长期记忆：向量库 + 结构化知识库。
+   - 支持检索增强（RAG）和知识版本化。
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+6. **治理与观测层（Governance & Observability）**
+   - 日志、指标、链路追踪、成本统计。
+   - 安全审计、策略引擎、敏感信息治理。
 
-## Test and Deploy
+---
 
-Use the built-in continuous integration in GitLab.
+## 3. 核心模块设计
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+### 3.1 Task Engine（任务引擎）
+- **任务模型**：Task / Step / Artifact / Event。
+- **状态流转**：Created → Queued → Running → Succeeded/Failed/Cancelled。
+- **容错机制**：幂等键、指数退避重试、死信队列。
 
-***
+### 3.2 Agent Kernel（智能体内核）
+- 支持 ReAct / Plan-Execute / Reflection 等策略。
+- 内置上下文压缩与摘要机制，控制 Token 成本。
+- 对每次工具调用做权限校验与沙箱隔离。
 
-# Editing this README
+### 3.3 Tool Bus（工具总线）
+- 采用统一 ToolSpec 协议：`name / input_schema / output_schema / timeout / permission`。
+- 支持同步调用、异步任务、流式结果。
+- 标准化错误码与降级策略。
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+### 3.4 Memory Service（记忆服务）
+- 支持语义检索、时间衰减、标签过滤。
+- 记忆写入触发规则：高价值结论、用户偏好、长期任务上下文。
+- 通过评分机制避免“噪声记忆”污染。
 
-## Suggestions for a good README
+### 3.5 Policy Engine（策略引擎）
+- 定义模型选择策略（质量/速度/成本优先）。
+- 定义数据访问策略（按租户、角色、资源范围授权）。
+- 定义响应合规策略（脱敏、拒答、人工复核）。
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+---
 
-## Name
-Choose a self-explaining name for your project.
+## 4. 关键流程
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+### 4.1 请求执行主流程
+1. Gateway 接收请求并完成鉴权。
+2. Orchestrator 创建 Task 并进行任务拆解。
+3. Agent Runtime 拉取 Step，结合 Memory 生成执行计划。
+4. 通过 Tool Bus 调用外部能力并回收结果。
+5. Orchestrator 汇总产物并写入审计日志。
+6. 将最终结果返回调用方，并触发异步评估。
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+### 4.2 失败恢复流程
+- Step 失败后按策略重试。
+- 达到重试上限后标记失败并触发补偿任务。
+- 对可回放任务保留完整事件流用于复盘。
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+---
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+## 5. 数据模型（草案）
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+- `tasks(id, tenant_id, type, status, priority, created_at, updated_at)`
+- `task_steps(id, task_id, agent_role, tool_name, status, input, output, started_at, ended_at)`
+- `artifacts(id, task_id, kind, uri, metadata, version)`
+- `memories(id, tenant_id, scope, content, embedding, score, tags, ttl)`
+- `policies(id, tenant_id, policy_type, rule, enabled, version)`
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+---
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+## 6. 非功能性设计
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+- **可靠性**：核心链路高可用，任务可恢复。
+- **可扩展性**：支持多租户横向扩展与模型/工具热插拔。
+- **可观测性**：端到端 Trace + 成本/质量指标看板。
+- **安全性**：最小权限、数据加密、操作审计。
+- **性能目标（初稿）**：
+  - P95 首 token 延迟 < 2s（轻量任务）
+  - 异步任务吞吐可水平扩展
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+---
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+## 7. 里程碑规划（建议）
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+### M1（基础可用）
+- 单 Agent 执行链路
+- 工具总线最小集
+- 基础任务状态机 + 日志
 
-## License
-For open source projects, say how it is licensed.
+### M2（协作增强）
+- 多 Agent 协作与任务拆解
+- 记忆服务接入（RAG）
+- 失败恢复与回放
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+### M3（生产治理）
+- 策略引擎与权限系统
+- 全链路观测 + 成本治理
+- 灰度发布与 A/B 评估
+
+---
+
+## 8. 下一步待补充
+
+- Workflow DSL 语法与示例。
+- Agent 角色协议（输入输出契约）。
+- 评估体系（质量、时延、成本三维度）。
+- 运维手册（告警、扩缩容、应急预案）。
+
